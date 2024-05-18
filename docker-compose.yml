@@ -1,0 +1,91 @@
+---
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15.2
+    restart: always
+    networks:
+      scoring-network:
+    env_file: .env
+    environment:
+      - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      - POSTGRES_USER=$POSTGRES_USER
+      - POSTGRES_DB=$POSTGRES_DB
+      - POSTGRES_HOST_AUTH_METHOD=$POSTGRES_HOST_AUTH_METHOD
+      - POSTGRES_INITDB_ARGS=$POSTGRES_INITDB_ARGS
+    expose:
+      - "5432"
+    volumes:
+      - scoring-pgdata:/var/lib/postgresql/data/
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    user: postgres
+
+  redis:
+    restart: always
+    image: redis:7.0.10-alpine
+    networks:
+      scoring-network:
+    expose:
+      - "6379"
+    volumes:
+      - scoring-redisdata:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      interval: 3s
+      timeout: 3s
+      retries: 7
+
+  scoring-django:
+    build: src_django
+    restart: always
+    networks:
+      scoring-network:
+    expose:
+      - "8000"
+    volumes:
+      - scoring-django-media:/app/media
+      - scoring-django-static:/app/static
+    env_file: src_django/.env
+    entrypoint: /entrypoint.sh
+    healthcheck:
+      test: ["CMD", "/app/health_check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    build: ./nginx
+    restart: always
+    networks:
+      scoring-network:
+    ports:
+      - "8080:80"
+    volumes:
+      - scoring-django-static:/app/static
+      - scoring-django-media:/app/media
+    healthcheck:
+      test: [ "CMD", "curl", "-v", "-H", "Content-Type: application/json",  "http://nginx" ]
+    depends_on:
+      - scoring-django
+
+volumes:
+  scoring-django-static:
+  scoring-django-media:
+  scoring-pgdata:
+  scoring-redisdata:
+
+networks:
+  scoring-network:
+    external: false
+    driver: bridge
