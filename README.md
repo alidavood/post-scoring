@@ -46,6 +46,5 @@ To test the system:
 1. create default admin user
 2. login into /admin with these credentials user:admin password:asdfqwer
 3. then go to /swagger to see endpoints
-4. at first create a scoring (need to be login by session)
-5. call deposit api to have deposit
-6. call withdraw api to have withdrawal
+4. at first create posts (need to be login by session)
+5. try to set score for the posts
